@@ -54,15 +54,23 @@ if (isset($_GET['edit'])) {
     }
 }
 
+$q = isset($_GET['q']) ? trim($_GET['q']) : '';
 $obatList = $pdo->query('SELECT * FROM obat ORDER BY nama_obat')->fetchAll();
-$pasienList = $pdo->query(
-    "SELECT p.*, GROUP_CONCAT(o.nama_obat ORDER BY o.nama_obat SEPARATOR ', ') AS daftar_alergi
+$pasienSql = "SELECT p.*, GROUP_CONCAT(o.nama_obat ORDER BY o.nama_obat SEPARATOR ', ') AS daftar_alergi
      FROM pasien p
      LEFT JOIN alergi_pasien ap ON ap.pasien_id = p.id
      LEFT JOIN obat o ON o.id = ap.obat_id
-     GROUP BY p.id
-     ORDER BY p.nama_lengkap"
-)->fetchAll();
+     GROUP BY p.id";
+$pasienParams = array();
+if ($q !== '') {
+    $keyword = '%' . $q . '%';
+    $pasienSql .= " HAVING p.nama_lengkap LIKE ? OR p.no_hp LIKE ? OR p.riwayat_penyakit LIKE ? OR daftar_alergi LIKE ?";
+    $pasienParams = array($keyword, $keyword, $keyword, $keyword);
+}
+$pasienSql .= ' ORDER BY p.nama_lengkap';
+$stmtPasien = $pdo->prepare($pasienSql);
+$stmtPasien->execute($pasienParams);
+$pasienList = $stmtPasien->fetchAll();
 
 require 'header.php';
 ?>
@@ -109,10 +117,23 @@ require 'header.php';
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header bg-white fw-semibold">Data Pasien</div>
-            <div class="card-body table-responsive">
+            <div class="card-body">
+                <form method="get" class="row g-2 mb-3">
+                    <div class="col-md-9">
+                        <input type="text" name="q" class="form-control" value="<?= e($q); ?>" placeholder="Cari nama, no HP, riwayat penyakit, atau alergi obat...">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button class="btn btn-outline-primary flex-fill" type="submit">Cari</button>
+                        <?php if ($q !== ''): ?><a class="btn btn-outline-secondary" href="pasien.php">Reset</a><?php endif; ?>
+                    </div>
+                </form>
+                <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead><tr><th>Nama</th><th>Usia</th><th>No HP</th><th>Alergi</th><th>Aksi</th></tr></thead>
                     <tbody>
+                    <?php if (!$pasienList): ?>
+                        <tr><td colspan="5" class="text-center text-muted">Data pasien tidak ditemukan.</td></tr>
+                    <?php endif; ?>
                     <?php foreach ($pasienList as $pasien): ?>
                         <tr>
                             <td><strong><?= e($pasien['nama_lengkap']); ?></strong><br><span class="small text-muted"><?= e($pasien['riwayat_penyakit']); ?></span></td>
@@ -127,6 +148,7 @@ require 'header.php';
                     <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>

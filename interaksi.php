@@ -40,14 +40,22 @@ if (isset($_GET['edit'])) {
     $edit = $stmt->fetch();
 }
 
+$q = isset($_GET['q']) ? trim($_GET['q']) : '';
 $obatList = $pdo->query('SELECT * FROM obat ORDER BY nama_obat')->fetchAll();
-$interaksiList = $pdo->query(
-    "SELECT ai.*, o1.nama_obat AS obat1, o2.nama_obat AS obat2
+$interaksiSql = "SELECT ai.*, o1.nama_obat AS obat1, o2.nama_obat AS obat2
      FROM aturan_interaksi ai
      JOIN obat o1 ON o1.id = ai.obat1_id
-     JOIN obat o2 ON o2.id = ai.obat2_id
-     ORDER BY ai.tingkat_bahaya DESC, o1.nama_obat"
-)->fetchAll();
+     JOIN obat o2 ON o2.id = ai.obat2_id";
+$interaksiParams = array();
+if ($q !== '') {
+    $keyword = '%' . $q . '%';
+    $interaksiSql .= " WHERE o1.nama_obat LIKE ? OR o2.nama_obat LIKE ? OR ai.tingkat_bahaya LIKE ? OR ai.deskripsi_efek LIKE ?";
+    $interaksiParams = array($keyword, $keyword, $keyword, $keyword);
+}
+$interaksiSql .= ' ORDER BY ai.tingkat_bahaya DESC, o1.nama_obat';
+$stmtInteraksi = $pdo->prepare($interaksiSql);
+$stmtInteraksi->execute($interaksiParams);
+$interaksiList = $stmtInteraksi->fetchAll();
 require 'header.php';
 ?>
 <div class="row g-4">
@@ -95,10 +103,23 @@ require 'header.php';
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header bg-white fw-semibold">Knowledge Base Interaksi Obat</div>
-            <div class="card-body table-responsive">
+            <div class="card-body">
+                <form method="get" class="row g-2 mb-3">
+                    <div class="col-md-9">
+                        <input type="text" name="q" class="form-control" value="<?= e($q); ?>" placeholder="Cari nama obat, tingkat bahaya, atau deskripsi efek...">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button class="btn btn-outline-primary flex-fill" type="submit">Cari</button>
+                        <?php if ($q !== ''): ?><a class="btn btn-outline-secondary" href="interaksi.php">Reset</a><?php endif; ?>
+                    </div>
+                </form>
+                <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead><tr><th>Pasangan Obat</th><th>Tingkat</th><th>Efek</th><th>Aksi</th></tr></thead>
                     <tbody>
+                    <?php if (!$interaksiList): ?>
+                        <tr><td colspan="4" class="text-center text-muted">Data interaksi tidak ditemukan.</td></tr>
+                    <?php endif; ?>
                     <?php foreach ($interaksiList as $row): ?>
                         <tr>
                             <td><?= e($row['obat1']); ?> + <?= e($row['obat2']); ?></td>
@@ -112,6 +133,7 @@ require 'header.php';
                     <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>

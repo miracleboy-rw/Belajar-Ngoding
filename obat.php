@@ -33,7 +33,18 @@ if (isset($_GET['edit'])) {
     $edit = $stmt->fetch();
 }
 
-$obatList = $pdo->query('SELECT * FROM obat ORDER BY nama_obat')->fetchAll();
+$q = isset($_GET['q']) ? trim($_GET['q']) : '';
+$obatSql = 'SELECT * FROM obat';
+$obatParams = array();
+if ($q !== '') {
+    $keyword = '%' . $q . '%';
+    $obatSql .= ' WHERE nama_obat LIKE ? OR kategori LIKE ? OR harga LIKE ?';
+    $obatParams = array($keyword, $keyword, $keyword);
+}
+$obatSql .= ' ORDER BY nama_obat';
+$stmtObat = $pdo->prepare($obatSql);
+$stmtObat->execute($obatParams);
+$obatList = $stmtObat->fetchAll();
 require 'header.php';
 ?>
 <div class="row g-4">
@@ -65,10 +76,23 @@ require 'header.php';
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header bg-white fw-semibold">Master Obat</div>
-            <div class="card-body table-responsive">
+            <div class="card-body">
+                <form method="get" class="row g-2 mb-3">
+                    <div class="col-md-9">
+                        <input type="text" name="q" class="form-control" value="<?= e($q); ?>" placeholder="Cari nama obat, kategori, atau harga...">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button class="btn btn-outline-primary flex-fill" type="submit">Cari</button>
+                        <?php if ($q !== ''): ?><a class="btn btn-outline-secondary" href="obat.php">Reset</a><?php endif; ?>
+                    </div>
+                </form>
+                <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead><tr><th>Nama Obat</th><th>Kategori</th><th>Harga</th><th>Aksi</th></tr></thead>
                     <tbody>
+                    <?php if (!$obatList): ?>
+                        <tr><td colspan="4" class="text-center text-muted">Data obat tidak ditemukan.</td></tr>
+                    <?php endif; ?>
                     <?php foreach ($obatList as $obat): ?>
                         <tr>
                             <td><?= e($obat['nama_obat']); ?></td>
@@ -82,6 +106,7 @@ require 'header.php';
                     <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>
